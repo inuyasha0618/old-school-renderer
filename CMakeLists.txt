@@ -6,4 +6,4 @@ set(CMAKE_CXX_FLAGS "-g -Wall  -I C:\\mingw\\include -L C:\\mingw\\lib")
 
 project (oldSchoolRenderer)
 
-add_executable(oldSchoolRenderer main.cpp tgaimage.cpp model.cpp)
+add_executable(oldSchoolRenderer main.cpp STC_Gl.cpp tgaimage.cpp model.cpp)
