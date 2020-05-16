@@ -6,10 +6,9 @@
 #include "model.h"
 #include <math.h>
 #include "STC_Gl.h"
-// const TGAColor white = TGAColor(255, 255, 255, 255);
-// const TGAColor red   = TGAColor(255, 0,   0,   255);
-using namespace glm;
-using namespace std;
+
+// using namespace glm;
+// using namespace std;
 
 Model *model = NULL;
 
@@ -63,9 +62,11 @@ mat4 getViewMatrix(vec3& eye, vec3& target, vec3& up)
 struct PhongShader: BaseShader
 {
 	virtual vec4 VertexShader(vec4& P, mat4& modelMatrix, mat4& viewMatrix, mat4& perspectiveMatrix) {
-		return vec4();
+		return perspectiveMatrix * viewMatrix * modelMatrix * P;
 	}
-    virtual bool PixelShader() {
+    virtual bool PixelShader(vec3& OutFragColor, vec2 uv, vec3 N, vec3 LightDir) {
+		OutFragColor = vec3(std::max(float(0.0), dot(N, LightDir)));
+		
 		return false;
 	}
 };
@@ -97,8 +98,8 @@ int main(int argc, char** argv) {
 	mat4 ModelMatrix = mat4();
 	mat4 ViewMatrix = getViewMatrix(eye, target, up);
 	mat4 PerspectiveMatrix = getPerspective(90, 1.0, 0.1, 20);
-	
-	GraphicsPipeLine(model, image, &shader, ModelMatrix, ViewMatrix, PerspectiveMatrix, ScreenWidth, ScreenHeight);
+	vec3 lightDir = normalize(vec3(1.0, 0.0, 1.0));
+	GraphicsPipeLine(model, image, &shader, ModelMatrix, ViewMatrix, PerspectiveMatrix, ScreenWidth, ScreenHeight, lightDir);
 
 	image.flip_vertically(); // i want to have the origin at the left bottom corner of the image
 	image.write_tga_file("framebuffer.tga");

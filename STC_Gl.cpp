@@ -1,4 +1,7 @@
 #include "STC_Gl.h"
+#include <iostream>
+
+using namespace std;
 
 BaseShader::~BaseShader() {}
 
@@ -22,7 +25,7 @@ vec3 getBaryCoords(ivec2 *pts, ivec2 P)
 	return vec3(1.0 - cross_result.x - cross_result.y, cross_result.x, cross_result.y);
 }
 
-void rasterization(ivec3 *pts, TGAImage& image, TGAColor color, TGAImage& zbuffer)
+void rasterization(BaseShader* shader, ivec3 *pts, vec3* Ns, TGAImage& image, TGAColor color, TGAImage& zbuffer, vec3 lightDir)
 {
 	// float max_num = numeric_limits<int>::max();
 	float max_num = 8000;
@@ -56,9 +59,14 @@ void rasterization(ivec3 *pts, TGAImage& image, TGAColor color, TGAImage& zbuffe
             int fragDepth = pts[0].z * bary_coords.x + pts[1].z * bary_coords.y + pts[2].z * bary_coords.z;
             fragDepth = std::max(0, std::min(fragDepth, 255));
 
-			if (bary_coords.x < 0 || bary_coords.y < 0 || bary_coords.z < 0 || fragDepth > zbuffer.get(p.x, p.y).r) continue;
+            //                                                                  earlyZ, 先做深度剔除
+			if (bary_coords.x < 0 || bary_coords.y < 0 || bary_coords.z < 0 || fragDepth > zbuffer.get(p.x, p.y)[0]) continue;
 			// if (bary_coords.x < 0 || bary_coords.y < 0 || bary_coords.z < 0) continue;
-			image.set(p.x, p.y, color);
+			vec3 N = mat3(Ns[0], Ns[1], Ns[2]) * bary_coords;
+            N = normalize(N);
+            vec3 OutFragColor = vec3();
+            shader->PixelShader(OutFragColor, vec2(), N, lightDir);
+            image.set(p.x, p.y, TGAColor(OutFragColor.r * 255, OutFragColor.g * 255, OutFragColor.b * 255));
             zbuffer.set(p.x, p.y, TGAColor(fragDepth, fragDepth, fragDepth, fragDepth));
 		}
 	}
@@ -73,7 +81,7 @@ ivec3 viewport(vec3 NDC, int width, int height)
 	return ivec3(x, y, z);
 }
 
-void GraphicsPipeLine(Model* model, TGAImage& image, BaseShader* shader, mat4& modelMatrix, mat4& viewMatrix, mat4& perspectiveMatrix, int screenWidth, int screenHeight)
+void GraphicsPipeLine(Model* model, TGAImage& image, BaseShader* shader, mat4& modelMatrix, mat4& viewMatrix, mat4& perspectiveMatrix, int screenWidth, int screenHeight, vec3 LightDir)
 {
     TGAImage zbuffer(screenWidth, screenHeight, TGAImage::RGBA);
     for (int x = 0; x < screenWidth; x++)
@@ -83,26 +91,30 @@ void GraphicsPipeLine(Model* model, TGAImage& image, BaseShader* shader, mat4& m
             zbuffer.set(x, y, TGAColor(255, 255, 255, 255));
         }
     }
-    zbuffer.write_tga_file("zbuffer.tga");
+
     for (int i = 0; i < model->nfaces(); i++)
 	{
 		vector<int> vert_idx_in_currentFace = model->face(i);
 		ivec3 screen_pos[3];
+        vec2 uv[3];
+        vec3 N[3];
 		for (int j = 0; j < 3; j++)
 		{
-			// screen_pos[j].x = int((model->vert(vert_idx_in_currentFace[j]).x + 1) * 0.5 * ScreenWidth);
-			// screen_pos[j].y = int((model->vert(vert_idx_in_currentFace[j]).y + 1) * 0.5 * ScreenHeight);
-			vec3 pos = model->vert(vert_idx_in_currentFace[j]);
-			vec4 worldPos = vec4(pos.x, pos.y, pos.z, 1.0);
-			vec4 viewPos = viewMatrix * worldPos;
-			vec4 clipPos = perspectiveMatrix * viewPos;
-			vec3 NDC = vec3(clipPos.x / clipPos.w, clipPos.y / clipPos.w, clipPos.z / clipPos.w);
 
+			vec3 pos = model->vert(vert_idx_in_currentFace[j]);
+            vec4 P = vec4(pos.x, pos.y, pos.z, 1.0);
+            // 调用顶点着色器 得到裁剪空间坐标
+            vec4 clipCoord = shader->VertexShader(P, modelMatrix, viewMatrix, perspectiveMatrix);
+
+            // 得到Normalize Device Coordinate
+            vec3 NDC = vec3(clipCoord.x / clipCoord.w, clipCoord.y / clipCoord.w, clipCoord.z / clipCoord.w);
+
+            // 得到屏幕空间像素坐标(带深度)
 			screen_pos[j] = viewport(NDC, screenWidth, screenHeight);
-			// screen_pos[j] = tvec2<int>((model->vert(vert_idx_in_currentFace[j]).x + 1) * 0.5 * ScreenWidth, (model->vert(vert_idx_in_currentFace[j]).y + 1) * 0.5 * ScreenHeight);
+            uv[j] = model->uv(i, j);
+            N[j] = model->normal(i, j);
 		}
 
-		// rasterization(screen_pos, image, TGAColor(rand() % 255, rand() % 255, rand() % 255, 255));
 		vec3 pt0 = model->vert(vert_idx_in_currentFace[0]);
 		vec3 pt1 = model->vert(vert_idx_in_currentFace[1]);
 		vec3 pt2 = model->vert(vert_idx_in_currentFace[2]);
@@ -110,6 +122,6 @@ void GraphicsPipeLine(Model* model, TGAImage& image, BaseShader* shader, mat4& m
 		vec3 light_dir = vec3(0.0, 0.0, -1.0);
 		float intensity = dot(flat_normal, light_dir);
 		if (intensity > 0)
-			rasterization(screen_pos, image, TGAColor(intensity * 255, intensity * 255, intensity * 255, 255), zbuffer);
+			rasterization(shader, screen_pos, N, image, TGAColor(intensity * 255, intensity * 255, intensity * 255, 255), zbuffer, LightDir);
 	}
 }
