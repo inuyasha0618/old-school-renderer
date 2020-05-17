@@ -122,8 +122,8 @@ struct PhongShader: BaseShader
 		vec3 b2 = vec3(varying_uv[1][1] - varying_uv[0][1], varying_uv[2][1] - varying_uv[0][1], 0.0);
 
 		mat3 TBN;
-		TBN[0] = A_inv * b1;
-		TBN[1] = A_inv * b2;
+		TBN[0] = normalize(A_inv * b1);
+		TBN[1] = normalize(A_inv * b2);
 		TBN[2] = N;
 
 		vec3 world_space_normal = normalize(TBN * model->normal(uv));
