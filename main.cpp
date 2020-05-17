@@ -128,9 +128,19 @@ struct PhongShader: BaseShader
 
 		vec3 world_space_normal = normalize(TBN * model->normal(uv));
 
+		vec3 r = normalize((N * (dot(N, LightDir)*2.f) - LightDir));   // reflected light
+        float spec = pow(std::max(r.z, 0.0f), model->specular(uv));
+
 		// cout << "depth_in_shadow: " << depth_in_shadow << " depth_in_shadowbuffer: " << depth_in_shadowbuffer << endl;
-		OutFragColor = model->diffuse(uv) * std::max(float(0.0), dot(world_space_normal, LightDir)) * shadow;
+		// OutFragColor = model->diffuse(uv) * (std::max(float(0.0), dot(world_space_normal, LightDir)) + spec * 0.6) * shadow;
+		OutFragColor = model->diffuse(uv) * (std::max(float(0.0), dot(world_space_normal, LightDir))) * shadow;
+		OutFragColor[0] += 20;
+		OutFragColor[1] += 20;
+		OutFragColor[2] += 20;
 		// OutFragColor = model->diffuse(uv) * std::max(float(0.0), dot(N, LightDir)) * shadow;
+
+		// OutFragColor = model->diffuse(uv) * pow(std::max(r.z, 0.0f), model->specular(uv));
+		// OutFragColor = model->diffuse(uv) * model->specular(uv);
 		return false;
 	}
 };
@@ -199,7 +209,7 @@ int main(int argc, char** argv) {
 
 	// light pass
 	{
-		vec3 eye = vec3(0.0, 0.0, 2.0);
+		vec3 eye = vec3(0.0, 0.0, 1.5);
 		vec3 target = vec3(0.0, 0.0, 0.0);
 		vec3 up = vec3(0.0, 1.0, 0.0);
 
